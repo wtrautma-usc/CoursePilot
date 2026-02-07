@@ -1,55 +1,68 @@
-"""
-CoursePilot FastAPI Dependencies Module.
-
-This module provides reusable dependency functions for FastAPI routes,
-including authentication and authorization using Firebase Auth.
-"""
+from datetime import datetime
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from firebase_admin import auth
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-# HTTP Bearer token security scheme
+from app.firebase import auth_client, db
+from app.models.schemas import UserResponse
+
 security = HTTPBearer()
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> str:
+) -> UserResponse:
     """
-    Dependency to verify Firebase Auth token and return user ID.
-
-    This function extracts and verifies the Firebase ID token from the
-    Authorization header, then returns the authenticated user's Firebase UID.
-    Use this as a dependency in protected routes to ensure authentication.
-
-    Args:
-        credentials: HTTP Bearer token credentials from Authorization header
-
-    Returns:
-        str: The authenticated user's Firebase UID
-
-    Raises:
-        HTTPException: 401 if token is invalid or verification fails
-
-    Usage in routes:
-        @router.get("/protected")
-        async def protected_route(user_id: str = Depends(get_current_user)):
-            # user_id is the authenticated user's Firebase UID
-            pass
+    Validate Firebase JWT token and return user data.
+    Creates user document in Firestore if it doesn't exist.
     """
+    token = credentials.credentials
+
     try:
-        # Verify the Firebase ID token
-        decoded_token = auth.verify_id_token(credentials.credentials)
-
-        # Extract the user ID from the decoded token
-        user_id: str = decoded_token["uid"]
-
-        return user_id
-
-    except Exception as e:
+        # Verify the token with Firebase
+        decoded_token = auth_client.verify_id_token(token)
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {str(e)}",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    uid = decoded_token["uid"]
+    email = decoded_token.get("email", "")
+
+    # Check if user exists in Firestore
+    user_ref = db.collection("users").document(uid)
+    user_doc = user_ref.get()
+
+    if user_doc.exists:
+        user_data = user_doc.to_dict()
+    else:
+        # Create new user document
+        user_data = {
+            "uid": uid,
+            "email": email,
+            "display_name": decoded_token.get("name"),
+            "photo_url": decoded_token.get("picture"),
+            "phone_number": None,
+            "created_at": datetime.utcnow(),
+            "preferences": {
+                "notifications": {
+                    "email_enabled": True,
+                    "sms_enabled": False,
+                    "push_enabled": True,
+                    "timing": {
+                        "one_week_before": True,
+                        "three_days_before": True,
+                        "twenty_four_hours_before": True,
+                        "same_day": False,
+                    },
+                },
+                "theme": "light",
+                "calendar_start_day": "Sunday",
+            },
+            "is_onboarded": False,
+        }
+        user_ref.set(user_data)
+
+    return UserResponse(**user_data)

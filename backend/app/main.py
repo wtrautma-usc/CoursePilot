@@ -24,12 +24,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: Import routers as they are created
-# Example:
-# from app.routes import courses, syllabi, assignments
-# app.include_router(courses.router)
-# app.include_router(syllabi.router)
-# app.include_router(assignments.router)
+# Import routers
+from app.routes import users
+
+# Register routers
+app.include_router(users.router)
 
 
 @app.get("/")
