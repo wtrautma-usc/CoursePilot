@@ -25,10 +25,11 @@ app.add_middleware(
 )
 
 # Import routers
-from app.routes import users
+from app.routes import syllabi, users
 
 # Register routers
 app.include_router(users.router)
+app.include_router(syllabi.router)
 
 
 @app.get("/")
