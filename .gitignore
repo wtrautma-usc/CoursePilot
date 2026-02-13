@@ -85,3 +85,6 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+
+# Team context and personal documentation (not synced to GitHub)
+team-context/
