@@ -102,13 +102,14 @@ async def upload_syllabus(
         # Save metadata to Firestore
         db.collection("syllabi").document(syllabus_id).set(metadata.model_dump())
         
-        # TODO: Trigger Celery task for PDF processing
-        # from app.tasks.syllabus_processing import process_syllabus
-        # process_syllabus.delay(syllabus_id)
-        
+        # Trigger Celery task for PDF processing
+        from app.tasks.syllabus_processing import process_syllabus
+        result = process_syllabus.delay(syllabus_id)
+
         # Return success response
         return SyllabusUploadResponse(
             syllabus_id=syllabus_id,
+            job_id=result.id,
             filename=file.filename,
             file_url=file_url,
             status="pending",
