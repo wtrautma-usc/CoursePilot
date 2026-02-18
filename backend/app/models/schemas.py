@@ -56,7 +56,6 @@ class UserUpdate(BaseModel):
 class SyllabusUploadResponse(BaseModel):
     """Response model for syllabus upload"""
     syllabus_id: str
-    job_id: str
     filename: str
     file_url: str
     status: str

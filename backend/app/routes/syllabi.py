@@ -8,11 +8,12 @@ from datetime import datetime
 from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 
 from app.dependencies import get_current_user
 from app.firebase import db, storage_bucket
 from app.models.schemas import SyllabusMetadata, SyllabusUploadResponse, UserResponse
+from app.tasks.syllabus_processing import process_syllabus
 
 router = APIRouter(prefix="/api/v1/syllabi", tags=["syllabi"])
 
@@ -24,6 +25,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 @router.post("/upload", response_model=SyllabusUploadResponse, status_code=201)
 async def upload_syllabus(
     file: Annotated[UploadFile, File(description="PDF syllabus file to upload")],
+    background_tasks: BackgroundTasks,
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
@@ -33,7 +35,7 @@ async def upload_syllabus(
     1. Validates the file is a PDF and within size limits
     2. Uploads the file to Firebase Storage
     3. Saves metadata to Firestore
-    4. Triggers background processing (Celery task)
+    4. Triggers background processing via FastAPI BackgroundTasks
     
     Args:
         file: PDF file to upload
@@ -102,19 +104,17 @@ async def upload_syllabus(
         # Save metadata to Firestore
         db.collection("syllabi").document(syllabus_id).set(metadata.model_dump())
         
-        # Trigger Celery task for PDF processing
-        from app.tasks.syllabus_processing import process_syllabus
-        result = process_syllabus.delay(syllabus_id)
+        # Trigger background processing via FastAPI BackgroundTasks
+        background_tasks.add_task(process_syllabus, syllabus_id)
 
         # Return success response
         return SyllabusUploadResponse(
             syllabus_id=syllabus_id,
-            job_id=result.id,
             filename=file.filename,
             file_url=file_url,
-            status="pending",
+            status="processing",
             uploaded_at=uploaded_at,
-            message="Syllabus uploaded successfully. Processing will begin shortly.",
+            message="Syllabus uploaded successfully. Processing has started.",
         )
         
     except Exception as e:

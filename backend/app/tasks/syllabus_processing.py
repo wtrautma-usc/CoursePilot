@@ -1,47 +1,45 @@
 """
-Syllabus Processing Celery Task.
+Syllabus Processing Background Task.
 
 This module contains the background task for processing uploaded syllabus PDFs.
+Uses FastAPI BackgroundTasks instead of Celery to avoid the cost of a
+separate worker process and Redis broker on Render.
+
 The pipeline:
     1. User uploads PDF via /api/v1/syllabi/upload (status: "pending")
-    2. Celery task picks up the job (status: "processing")
+    2. BackgroundTask starts processing (status: "processing")
     3. AI parses the PDF and extracts calendar events
-    4. Events are saved to Firestore for user review (status: "pending_review")
+    4. Events are saved to Firestore for user review (status: "completed")
     5. If anything fails, the syllabus is marked (status: "failed")
 
+Frontend polls GET /api/v1/syllabi/{syllabus_id} to check status.
+
 Usage:
+    from fastapi import BackgroundTasks
     from app.tasks.syllabus_processing import process_syllabus
 
-    # Trigger asynchronously
-    result = process_syllabus.delay(syllabus_id)
-    job_id = result.id  # Use this to poll /api/v1/jobs/{job_id}/status
+    @router.post("/upload")
+    async def upload(background_tasks: BackgroundTasks):
+        background_tasks.add_task(process_syllabus, syllabus_id)
 """
 
+import time
 from datetime import datetime
 
-from celery_app import celery_app
 from app.firebase import db
 
 
-@celery_app.task(bind=True, name="process_syllabus")
-def process_syllabus(self, syllabus_id: str) -> dict:
+def process_syllabus(syllabus_id: str) -> None:
     """
     Process an uploaded syllabus PDF and extract calendar events.
 
-    This task runs asynchronously via Celery. It reads the syllabus PDF
-    from Firebase Storage, uses AI to extract course events (assignments,
-    exams, quizzes, etc.), and stores them in Firestore for user review.
+    This function runs in the background via FastAPI BackgroundTasks.
+    It reads the syllabus PDF from Firebase Storage, uses AI to extract
+    course events (assignments, exams, quizzes, etc.), and stores them
+    in Firestore for user review.
 
     Args:
-        self: Celery task instance (bound task).
         syllabus_id: The unique ID of the syllabus document in Firestore.
-
-    Returns:
-        dict: Result with status and syllabus_id.
-              Example: {"status": "pending_review", "syllabus_id": "abc-123"}
-
-    Raises:
-        Exception: Re-raises any exception after marking the syllabus as failed.
     """
     syllabus_ref = db.collection("syllabi").document(syllabus_id)
 
@@ -65,13 +63,14 @@ def process_syllabus(self, syllabus_id: str) -> dict:
         # - Extract grading weights and generate sub-task checklists
         # - Save extracted events to Firestore "events" collection
 
-        # ── Step 4: Mark as pending review ───────────────────────────
+        # Simulate processing time (remove when AI integration is added)
+        time.sleep(5)
+
+        # ── Step 4: Mark as completed ────────────────────────────────
         syllabus_ref.update({
-            "status": "pending_review",
+            "status": "completed",
             "processed_at": datetime.utcnow(),
         })
-
-        return {"status": "pending_review", "syllabus_id": syllabus_id}
 
     except Exception as exc:
         # ── Mark as failed and record error ──────────────────────────
@@ -80,4 +79,3 @@ def process_syllabus(self, syllabus_id: str) -> dict:
             "error_message": str(exc),
             "processed_at": datetime.utcnow(),
         })
-        raise
