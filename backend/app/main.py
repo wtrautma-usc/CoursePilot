@@ -30,6 +30,7 @@ from app.routes import syllabi, users
 # Register routers
 app.include_router(users.router)
 app.include_router(syllabi.router)
+# Job status is tracked via syllabus status field — poll GET /api/v1/syllabi/{id}
 
 
 @app.get("/")
