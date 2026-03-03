@@ -1,9 +1,7 @@
-import GoogleSignInButton from "@/components/GoogleSignInBtn";
+import { redirect } from "next/navigation";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black">
-      <GoogleSignInButton />
-    </main>
+    redirect("/login")
   );
 }
