@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
-import Section from "./Section";
-import Divider from "./Divider";
+import React, { useState } from "react";
 import Image from "next/image";
+import AddRow from "./AddRow";
+import ChecklistRow from "./ChecklistRow";
 
 type EditEventModalProps = {
   isOpen: boolean;
@@ -18,9 +18,12 @@ type EditEventModalProps = {
   } | null;
 };
 
-/**
- * Formats a time range like: "8:30 PM - 9:30 PM"
- */
+type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
 function formatTimeRange(start: Date, end?: Date) {
   const startLabel = start.toLocaleTimeString([], {
     hour: "numeric",
@@ -37,11 +40,26 @@ function formatTimeRange(start: Date, end?: Date) {
   return `${startLabel} - ${endLabel}`;
 }
 
-/**
- * Formats date like: "March 3"
- */
 function formatDateLabel(d: Date) {
   return d.toLocaleDateString([], { month: "long", day: "numeric" });
+}
+
+function HeadingWithLine({ title }: { title: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        margin: "15px 0 8px",
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#000000" }}>
+        {title}
+      </div>
+      <div style={{ flex: 1, height: 1, background: "#A4A9AD" }} />
+    </div>
+  );
 }
 
 export default function EditEventModal({
@@ -51,9 +69,69 @@ export default function EditEventModal({
 }: EditEventModalProps) {
   if (!isOpen || !event) return null;
 
-  const agendaItems: string[] = [];
-  const nextSteps: string[] = [];
-  const files: { name: string }[] = [];
+  const [agendaItems, setAgendaItems] = useState<ChecklistItem[]>([]);
+  const [nextStepsItems, setNextStepsItems] = useState<ChecklistItem[]>([]);
+  const [files, setFiles] = useState<{ name: string }[]>([]);
+
+  const [agendaAutoFocusId, setAgendaAutoFocusId] = useState<string | null>(
+    null,
+  );
+  const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<
+    string | null
+  >(null);
+
+  // ✅ DELETE handlers MUST be inside so they can access setState
+  function deleteAgendaItem(id: string) {
+    setAgendaItems((prev) => prev.filter((it) => it.id !== id));
+  }
+
+  function deleteNextStepsItem(id: string) {
+    setNextStepsItems((prev) => prev.filter((it) => it.id !== id));
+  }
+
+  function addAgendaItem() {
+    const id = crypto.randomUUID();
+    setAgendaItems((prev) => [...prev, { id, text: "", done: false }]);
+    setAgendaAutoFocusId(id);
+  }
+
+  function toggleAgendaItem(id: string) {
+    setAgendaItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
+    );
+  }
+
+  function changeAgendaText(id: string, text: string) {
+    setAgendaItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, text } : it)),
+    );
+  }
+
+  function commitAgendaItem(id: string) {
+    if (agendaAutoFocusId === id) setAgendaAutoFocusId(null);
+  }
+
+  function addNextStepsItem() {
+    const id = crypto.randomUUID();
+    setNextStepsItems((prev) => [...prev, { id, text: "", done: false }]);
+    setNextStepsAutoFocusId(id);
+  }
+
+  function toggleNextStepsItem(id: string) {
+    setNextStepsItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
+    );
+  }
+
+  function changeNextStepsText(id: string, text: string) {
+    setNextStepsItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, text } : it)),
+    );
+  }
+
+  function commitNextStepsItem(id: string) {
+    if (nextStepsAutoFocusId === id) setNextStepsAutoFocusId(null);
+  }
 
   return (
     <div
@@ -69,7 +147,6 @@ export default function EditEventModal({
         zIndex: 1000,
       }}
     >
-      {/* Modal Card */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -82,7 +159,6 @@ export default function EditEventModal({
           fontFamily: "Inter, sans-serif",
         }}
       >
-        {/* Header */}
         <div
           style={{
             background: "rgba(32, 163, 158, 0.22)",
@@ -93,13 +169,7 @@ export default function EditEventModal({
             justifyContent: "space-between",
           }}
         >
-          <div
-            style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: "#000000",
-            }}
-          >
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#000000" }}>
             Edit Event
           </div>
 
@@ -118,38 +188,9 @@ export default function EditEventModal({
           </button>
         </div>
 
-        {/* Content */}
         <div style={{ padding: "24px 50px" }}>
-          {/* ✅ Event Details with horizontal line */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 14,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#000000",
-              }}
-            >
-              Event Details
-            </div>
+          <HeadingWithLine title="Event Details" />
 
-            {/* Line that stretches */}
-            <div
-              style={{
-                flex: 1,
-                height: 1,
-                background: "#A4A9AD",
-              }}
-            />
-          </div>
-
-          {/* Title row */}
           <div
             style={{
               display: "flex",
@@ -162,7 +203,6 @@ export default function EditEventModal({
             <div style={{ fontSize: 16, fontWeight: 500, color: "#000000" }}>
               {event.title || "Untitled event"}
             </div>
-
             <button
               type="button"
               style={{
@@ -177,7 +217,6 @@ export default function EditEventModal({
             </button>
           </div>
 
-          {/* Time + Date */}
           <div
             style={{
               display: "flex",
@@ -188,36 +227,17 @@ export default function EditEventModal({
               fontSize: 13,
             }}
           >
-            {/* Clock */}
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-            >
-              <Image
-                src="/icons/clock.svg"
-                alt="Time"
-                width={16}
-                height={16}
-                style={{ display: "block", marginTop: -2 }}
-              />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Image src="/icons/clock.svg" alt="Time" width={16} height={16} />
               {formatTimeRange(event.start, event.end)}
             </span>
 
-            {/* Calendar */}
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-            >
-              <Image
-                src="/icons/calendar.svg"
-                alt="Date"
-                width={16}
-                height={16}
-                style={{ display: "block", marginTop: -1 }}
-              />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Image src="/icons/calendar.svg" alt="Date" width={16} height={16} />
               {formatDateLabel(event.start)}
             </span>
           </div>
 
-          {/* Join meeting button */}
           <button
             type="button"
             style={{
@@ -228,40 +248,68 @@ export default function EditEventModal({
               fontSize: 12,
               cursor: "not-allowed",
               opacity: 0.7,
-              marginBottom: 18,
+              marginBottom: 8,
             }}
             disabled
           >
             Join meeting
           </button>
 
-          <Divider />
+          {/* Agenda */}
+          <HeadingWithLine title="Agenda" />
+          {agendaItems.length === 0 && (
+            <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+              No agenda yet
+            </div>
+          )}
+          {agendaItems.map((item) => (
+            <ChecklistRow
+              key={item.id}
+              id={item.id}
+              text={item.text}
+              done={item.done}
+              placeholder="Type here"
+              autoFocus={agendaAutoFocusId === item.id}
+              onToggle={toggleAgendaItem}
+              onChangeText={changeAgendaText}
+              onCommit={commitAgendaItem}
+              onDelete={deleteAgendaItem}
+            />
+          ))}
+          <AddRow label="Add item" onClick={addAgendaItem} />
 
-          <Section
-            title="Agenda"
-            emptyText="No agenda yet"
-            items={agendaItems}
-          />
-
-          <Divider />
-
-          <Section
-            title="Next Steps"
-            emptyText="No next steps yet"
-            items={nextSteps}
-          />
-
-          <Divider />
+          {/* Next Steps */}
+          <HeadingWithLine title="Next Steps" />
+          {nextStepsItems.length === 0 && (
+            <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+              No next steps yet
+            </div>
+          )}
+          {nextStepsItems.map((item) => (
+            <ChecklistRow
+              key={item.id}
+              id={item.id}
+              text={item.text}
+              done={item.done}
+              placeholder="Type here"
+              autoFocus={nextStepsAutoFocusId === item.id}
+              onToggle={toggleNextStepsItem}
+              onChangeText={changeNextStepsText}
+              onCommit={commitNextStepsItem}
+              onDelete={deleteNextStepsItem} // ✅ correct handler
+            />
+          ))}
+          <AddRow label="Add item" onClick={addNextStepsItem} />
 
           {/* Files */}
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-            Files
-          </div>
-
+          <HeadingWithLine title="Files" />
           {files.length === 0 ? (
-            <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 12 }}>
-              No files yet
-            </div>
+            <>
+              <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+                No files yet
+              </div>
+              <AddRow label="Add file" onClick={() => {}} />
+            </>
           ) : (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {files.map((f, idx) => (
@@ -281,13 +329,12 @@ export default function EditEventModal({
             </div>
           )}
 
-          {/* Footer */}
           <div
             style={{
               display: "flex",
               justifyContent: "flex-end",
               gap: 12,
-              marginTop: 18,
+              marginTop: 24,
             }}
           >
             <button
@@ -315,7 +362,6 @@ export default function EditEventModal({
                 borderRadius: 10,
                 padding: "10px 16px",
                 cursor: "not-allowed",
-                opacity: 1,
               }}
               disabled
             >
