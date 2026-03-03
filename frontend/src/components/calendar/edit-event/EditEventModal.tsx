@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import AddRow from "./AddRow";
 import ChecklistRow from "./ChecklistRow";
@@ -62,120 +62,131 @@ function HeadingWithLine({ title }: { title: string }) {
   );
 }
 
-export default function EditEventModal({
-  isOpen,
-  onClose,
-  event,
-}: EditEventModalProps) {
-  if (!isOpen || !event) return null;
+export default function EditEventModal({ isOpen, onClose, event }: EditEventModalProps) {
+  /**
+   * IMPORTANT:
+   * Do NOT early-return before hooks. That can cause React internal errors.
+   * We render null at the bottom instead.
+   */
 
   const [agendaItems, setAgendaItems] = useState<ChecklistItem[]>([]);
   const [nextStepsItems, setNextStepsItems] = useState<ChecklistItem[]>([]);
   const [files, setFiles] = useState<{ name: string }[]>([]);
 
-  const [agendaAutoFocusId, setAgendaAutoFocusId] = useState<string | null>(
+  const [agendaAutoFocusId, setAgendaAutoFocusId] = useState<string | null>(null);
+  const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<string | null>(
     null,
   );
-  const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<
-    string | null
-  >(null);
 
-  // ✅ Title inline-edit state
+  // Title inline-edit state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(event.title || "");
+  const [titleDraft, setTitleDraft] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset title draft when a new event is opened
+  // For "underline matches text width" (autosizing)
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [titleInputWidthPx, setTitleInputWidthPx] = useState<number>(40);
+
+  // Reset title draft when event changes / modal opens
   useEffect(() => {
+    if (!event) return;
     setIsEditingTitle(false);
     setTitleDraft(event.title || "");
-  }, [event.id, event.title]);
+  }, [event?.id, event?.title]);
 
-  // Auto-focus when editing starts
+  // Focus + select when entering edit mode
   useEffect(() => {
-    if (isEditingTitle) {
-      requestAnimationFrame(() => {
-        titleInputRef.current?.focus();
-        titleInputRef.current?.select();
-      });
-    }
+    if (!isEditingTitle) return;
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
   }, [isEditingTitle]);
 
-  function commitTitle() {
-    const next = titleDraft.trim();
+  // Measure the text width so the underline matches the title length
+  useLayoutEffect(() => {
+    // If not open or no event, keep safe defaults
+    if (!isOpen || !event) return;
 
-    // If empty, revert
+    const text = titleDraft || " "; // measure something even when empty
+    if (measureRef.current) {
+      measureRef.current.textContent = text;
+
+      // Add a tiny buffer so the caret doesn't look cramped
+      const w = Math.ceil(measureRef.current.getBoundingClientRect().width) + 6;
+      setTitleInputWidthPx(Math.max(40, w));
+    }
+  }, [titleDraft, isOpen, event]);
+
+  function commitTitle() {
+    if (!event) return;
+
+    const next = titleDraft.trim();
     if (!next) {
       setTitleDraft(event.title || "");
       setIsEditingTitle(false);
       return;
     }
 
-    // ✅ TODO: Persist this change to your real event store/state
+    // ✅ TODO: Persist to your real event store/state here
     // Example:
     // updateEvent(event.id, { title: next });
 
-    // For now, just exit edit mode (UI already shows the draft)
     setIsEditingTitle(false);
   }
 
   function cancelTitleEdit() {
+    if (!event) return;
     setTitleDraft(event.title || "");
     setIsEditingTitle(false);
   }
 
-  // ✅ DELETE handlers MUST be inside so they can access setState
+  // Agenda
   function deleteAgendaItem(id: string) {
     setAgendaItems((prev) => prev.filter((it) => it.id !== id));
   }
-
-  function deleteNextStepsItem(id: string) {
-    setNextStepsItems((prev) => prev.filter((it) => it.id !== id));
-  }
-
   function addAgendaItem() {
     const id = crypto.randomUUID();
     setAgendaItems((prev) => [...prev, { id, text: "", done: false }]);
     setAgendaAutoFocusId(id);
   }
-
   function toggleAgendaItem(id: string) {
     setAgendaItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
     );
   }
-
   function changeAgendaText(id: string, text: string) {
-    setAgendaItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, text } : it)),
-    );
+    setAgendaItems((prev) => prev.map((it) => (it.id === id ? { ...it, text } : it)));
   }
-
   function commitAgendaItem(id: string) {
     if (agendaAutoFocusId === id) setAgendaAutoFocusId(null);
   }
 
+  // Next steps
+  function deleteNextStepsItem(id: string) {
+    setNextStepsItems((prev) => prev.filter((it) => it.id !== id));
+  }
   function addNextStepsItem() {
     const id = crypto.randomUUID();
     setNextStepsItems((prev) => [...prev, { id, text: "", done: false }]);
     setNextStepsAutoFocusId(id);
   }
-
   function toggleNextStepsItem(id: string) {
     setNextStepsItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
     );
   }
-
   function changeNextStepsText(id: string, text: string) {
     setNextStepsItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, text } : it)),
     );
   }
-
   function commitNextStepsItem(id: string) {
     if (nextStepsAutoFocusId === id) setNextStepsAutoFocusId(null);
   }
+
+  // Render null AFTER hooks (safe)
+  if (!isOpen || !event) return null;
 
   return (
     <div
@@ -235,7 +246,7 @@ export default function EditEventModal({
         <div style={{ padding: "24px 50px" }}>
           <HeadingWithLine title="Event Details" />
 
-          {/* ✅ Title row (text OR input) */}
+          {/* Title row */}
           <div
             style={{
               display: "flex",
@@ -245,47 +256,67 @@ export default function EditEventModal({
               marginBottom: 10,
             }}
           >
-            {!isEditingTitle ? (
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 500,
-                  color: "#000000",
-                  cursor: "default",
-                  userSelect: "none",
-                }}
-              >
-                {titleDraft || "Untitled event"}
-              </div>
-            ) : (
-              <input
-                ref={titleInputRef}
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={commitTitle}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitTitle();
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelTitleEdit();
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  fontWeight: 500,
-                  color: "#000000",
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  borderBottom: "1px solid #A4A9AD", // ✅ underline color
-                  paddingBottom: 2,
-                }}
-              />
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {!isEditingTitle ? (
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 500,
+                    color: "#000000",
+                    cursor: "default",
+                    userSelect: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {titleDraft || "Untitled event"}
+                </div>
+              ) : (
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  {/* Hidden measurer (matches input typography) */}
+                  <span
+                    ref={measureRef}
+                    style={{
+                      position: "absolute",
+                      visibility: "hidden",
+                      whiteSpace: "pre",
+                      fontSize: 16,
+                      fontWeight: 500,
+                      fontFamily: "Inter, sans-serif",
+                      paddingBottom: 2,
+                    }}
+                  />
+
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={commitTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitTitle();
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelTitleEdit();
+                      }
+                    }}
+                    style={{
+                      width: titleInputWidthPx,
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: "#000000",
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      borderBottom: "1px solid #A4A9AD", // ✅ underline color
+                      paddingBottom: 2,
+                    }}
+                    aria-label="Edit event title"
+                  />
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
