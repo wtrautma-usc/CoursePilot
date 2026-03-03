@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import AddRow from "./AddRow";
 import ChecklistRow from "./ChecklistRow";
@@ -79,6 +79,50 @@ export default function EditEventModal({
   const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<
     string | null
   >(null);
+
+  // ✅ Title inline-edit state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(event.title || "");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset title draft when a new event is opened
+  useEffect(() => {
+    setIsEditingTitle(false);
+    setTitleDraft(event.title || "");
+  }, [event.id, event.title]);
+
+  // Auto-focus when editing starts
+  useEffect(() => {
+    if (isEditingTitle) {
+      requestAnimationFrame(() => {
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+      });
+    }
+  }, [isEditingTitle]);
+
+  function commitTitle() {
+    const next = titleDraft.trim();
+
+    // If empty, revert
+    if (!next) {
+      setTitleDraft(event.title || "");
+      setIsEditingTitle(false);
+      return;
+    }
+
+    // ✅ TODO: Persist this change to your real event store/state
+    // Example:
+    // updateEvent(event.id, { title: next });
+
+    // For now, just exit edit mode (UI already shows the draft)
+    setIsEditingTitle(false);
+  }
+
+  function cancelTitleEdit() {
+    setTitleDraft(event.title || "");
+    setIsEditingTitle(false);
+  }
 
   // ✅ DELETE handlers MUST be inside so they can access setState
   function deleteAgendaItem(id: string) {
@@ -191,6 +235,7 @@ export default function EditEventModal({
         <div style={{ padding: "24px 50px" }}>
           <HeadingWithLine title="Event Details" />
 
+          {/* ✅ Title row (text OR input) */}
           <div
             style={{
               display: "flex",
@@ -200,20 +245,68 @@ export default function EditEventModal({
               marginBottom: 10,
             }}
           >
-            <div style={{ fontSize: 16, fontWeight: 500, color: "#000000" }}>
-              {event.title || "Untitled event"}
-            </div>
+            {!isEditingTitle ? (
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: "#000000",
+                  cursor: "default",
+                  userSelect: "none",
+                }}
+              >
+                {titleDraft || "Untitled event"}
+              </div>
+            ) : (
+              <input
+                ref={titleInputRef}
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitTitle();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelTitleEdit();
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: "#000000",
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  borderBottom: "1px solid #A4A9AD", // ✅ underline color
+                  paddingBottom: 2,
+                }}
+              />
+            )}
+
             <button
               type="button"
+              onClick={() => setIsEditingTitle(true)}
               style={{
                 border: "none",
                 background: "transparent",
                 cursor: "pointer",
                 fontSize: 16,
+                opacity: 0.8,
               }}
-              title="Edit title (later)"
+              aria-label="Edit title"
+              title="Edit title"
             >
-              ✎
+              <Image
+                src="/icons/Edit_Pencil_01.svg"
+                alt="Edit"
+                width={16}
+                height={16}
+                draggable={false}
+              />
             </button>
           </div>
 
@@ -296,7 +389,7 @@ export default function EditEventModal({
               onToggle={toggleNextStepsItem}
               onChangeText={changeNextStepsText}
               onCommit={commitNextStepsItem}
-              onDelete={deleteNextStepsItem} // ✅ correct handler
+              onDelete={deleteNextStepsItem}
             />
           ))}
           <AddRow label="Add item" onClick={addNextStepsItem} />
