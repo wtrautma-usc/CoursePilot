@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import EventTitleField from "./fields/EventTitleField";
+import EventDescriptionField from "./fields/EventDescriptionField";
 
 type EventDraft = {
   title: string;
@@ -17,6 +19,7 @@ type AddEventModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: EventDraft) => void;
+  
 };
 
 const COLORS = {

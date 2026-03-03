@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import AddRow from "./AddRow";
 import ChecklistRow from "./ChecklistRow";
 import EventDetailsSection from "./EventDetailsSection";
+
+import SaveButton from "../buttons/SaveButton";
+import DeleteButton from "../buttons/DeleteButton";
 
 type EditEventModalProps = {
   isOpen: boolean;
@@ -15,7 +18,26 @@ type EditEventModalProps = {
     end?: Date;
     color?: string;
     description?: string;
+
+    meetingLink?: string | null;
+    agendaItems?: { id: string; text: string; done: boolean }[];
+    nextStepsItems?: { id: string; text: string; done: boolean }[];
+    files?: { name: string }[];
   } | null;
+
+  onSaveEvent?: (
+    eventId: string,
+    updates: {
+      title: string;
+      description: string;
+      meetingLink: string | null;
+      agendaItems: { id: string; text: string; done: boolean }[];
+      nextStepsItems: { id: string; text: string; done: boolean }[];
+      files: { name: string }[];
+    },
+  ) => void;
+
+  onDeleteEvent?: (eventId: string) => void;
 };
 
 type ChecklistItem = {
@@ -42,50 +64,104 @@ function HeadingWithLine({ title }: { title: string }) {
   );
 }
 
-export default function EditEventModal({ isOpen, onClose, event }: EditEventModalProps) {
-  /**
-   * IMPORTANT:
-   * Do NOT early-return before hooks. That can cause React internal errors.
-   * We render null after hooks instead.
-   */
+function stringifyComparable(value: unknown) {
+  return JSON.stringify(value);
+}
 
+export default function EditEventModal({
+  isOpen,
+  onClose,
+  event,
+  onSaveEvent,
+  onDeleteEvent,
+}: EditEventModalProps) {
   const [agendaItems, setAgendaItems] = useState<ChecklistItem[]>([]);
   const [nextStepsItems, setNextStepsItems] = useState<ChecklistItem[]>([]);
   const [files, setFiles] = useState<{ name: string }[]>([]);
 
-  const [agendaAutoFocusId, setAgendaAutoFocusId] = useState<string | null>(null);
-  const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<string | null>(
+  // Owned here, UI is in EventDetailsSection
+  const [titleDraft, setTitleDraft] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [meetingLink, setMeetingLink] = useState<string | null>(null);
+
+  const [agendaAutoFocusId, setAgendaAutoFocusId] = useState<string | null>(
     null,
   );
+  const [nextStepsAutoFocusId, setNextStepsAutoFocusId] = useState<
+    string | null
+  >(null);
 
-  // Title draft is owned here (parent), UI lives in EventDetailsSection
-  const [titleDraft, setTitleDraft] = useState("");
+  const baselineRef = useRef<{
+    title: string;
+    description: string;
+    meetingLink: string | null;
+    agendaItems: ChecklistItem[];
+    nextStepsItems: ChecklistItem[];
+    files: { name: string }[];
+  } | null>(null);
 
-  // Reset local modal state when opening a different event (or opening modal)
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Reset local modal state when opening a different event
   useEffect(() => {
     if (!event) return;
-    setTitleDraft(event.title || "");
 
-    // Optional: reset these per-event so they don't carry across events
-    setAgendaItems([]);
-    setNextStepsItems([]);
-    setFiles([]);
+    setTitleDraft(event.title || "");
+    setDescriptionDraft(event.description || "");
+
+    setMeetingLink(event.meetingLink ?? null);
+    setAgendaItems(event.agendaItems ?? []);
+    setNextStepsItems(event.nextStepsItems ?? []);
+    setFiles(event.files ?? []);
+
     setAgendaAutoFocusId(null);
     setNextStepsAutoFocusId(null);
+
+    baselineRef.current = {
+      title: event.title || "",
+      description: event.description || "",
+      meetingLink: event.meetingLink ?? null,
+      agendaItems: event.agendaItems ?? [],
+      nextStepsItems: event.nextStepsItems ?? [],
+      files: event.files ?? [],
+    };
+
+    setIsDirty(false);
   }, [event?.id]);
+
+  // ✅ Compute dirty whenever any editable state changes
+  // IMPORTANT: dependency array must be constant length AND stable values
+  useEffect(() => {
+    if (!event) return;
+    if (!baselineRef.current) return;
+
+    const current = {
+      title: titleDraft,
+      description: descriptionDraft,
+      meetingLink,
+      agendaItems,
+      nextStepsItems,
+      files,
+    };
+
+    const dirty =
+      stringifyComparable(current) !== stringifyComparable(baselineRef.current);
+
+    setIsDirty(dirty);
+  }, [
+    event?.id, // ✅ not "event"
+    titleDraft,
+    descriptionDraft,
+    meetingLink,
+    agendaItems,
+    nextStepsItems,
+    files,
+  ]);
 
   function commitTitle() {
     if (!event) return;
-
     const next = titleDraft.trim();
-    if (!next) {
-      setTitleDraft(event.title || "");
-      return;
-    }
-
-    // ✅ TODO: Persist title change to your real event store/state here
-    // Example:
-    // updateEvent(event.id, { title: next });
+    if (!next) setTitleDraft(event.title || "");
   }
 
   function cancelTitleEdit() {
@@ -93,61 +169,76 @@ export default function EditEventModal({ isOpen, onClose, event }: EditEventModa
     setTitleDraft(event.title || "");
   }
 
+  function handleSave() {
+    if (!event) return;
+
+    const payload = {
+      title: titleDraft.trim() || event.title || "",
+      description: descriptionDraft, // or: descriptionDraft.trim()
+      meetingLink,
+      agendaItems,
+      nextStepsItems,
+      files,
+    };
+
+    onSaveEvent?.(event.id, payload);
+
+    baselineRef.current = { ...payload };
+    setIsDirty(false);
+  }
+
+  function handleDelete() {
+    if (!event) return;
+    onDeleteEvent?.(event.id);
+    onClose();
+  }
+
   // Agenda handlers
   function deleteAgendaItem(id: string) {
     setAgendaItems((prev) => prev.filter((it) => it.id !== id));
   }
-
   function addAgendaItem() {
     const id = crypto.randomUUID();
     setAgendaItems((prev) => [...prev, { id, text: "", done: false }]);
     setAgendaAutoFocusId(id);
   }
-
   function toggleAgendaItem(id: string) {
     setAgendaItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
     );
   }
-
   function changeAgendaText(id: string, text: string) {
     setAgendaItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, text } : it)),
     );
   }
-
   function commitAgendaItem(id: string) {
     if (agendaAutoFocusId === id) setAgendaAutoFocusId(null);
   }
 
-  // Next Steps handlers
+  // Next steps handlers
   function deleteNextStepsItem(id: string) {
     setNextStepsItems((prev) => prev.filter((it) => it.id !== id));
   }
-
   function addNextStepsItem() {
     const id = crypto.randomUUID();
     setNextStepsItems((prev) => [...prev, { id, text: "", done: false }]);
     setNextStepsAutoFocusId(id);
   }
-
   function toggleNextStepsItem(id: string) {
     setNextStepsItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
     );
   }
-
   function changeNextStepsText(id: string, text: string) {
     setNextStepsItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, text } : it)),
     );
   }
-
   function commitNextStepsItem(id: string) {
     if (nextStepsAutoFocusId === id) setNextStepsAutoFocusId(null);
   }
 
-  // Render null AFTER hooks (safe)
   if (!isOpen || !event) return null;
 
   return (
@@ -165,17 +256,19 @@ export default function EditEventModal({ isOpen, onClose, event }: EditEventModa
       }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 550,
-          maxWidth: "100%",
-          borderRadius: 16,
-          background: "#fff",
-          boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
-          overflow: "hidden",
-          fontFamily: "Inter, sans-serif",
-        }}
-      >
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    width: 550,
+    maxWidth: "100%",
+    maxHeight: "85vh",           // ✅ limit height
+    display: "flex",             // ✅ allow body to flex
+    flexDirection: "column",
+    borderRadius: 16,
+    background: "#fff",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
+    fontFamily: "Inter, sans-serif",
+  }}
+>
         {/* Header */}
         <div
           style={{
@@ -207,14 +300,24 @@ export default function EditEventModal({ isOpen, onClose, event }: EditEventModa
         </div>
 
         {/* Body */}
-        <div style={{ padding: "24px 50px" }}>
-          {/* ✅ Extracted Event Details section */}
+        <div
+  style={{
+    padding: "24px 50px",
+    overflowY: "auto",      // ✅ scroll here
+    flex: 1,                // ✅ take remaining height
+    scrollbarWidth: "thin",
+  }}
+>
           <EventDetailsSection
             event={event}
             titleDraft={titleDraft}
             setTitleDraft={setTitleDraft}
             onCommitTitle={commitTitle}
             onCancelTitle={cancelTitleEdit}
+            descriptionDraft={descriptionDraft}
+            setDescriptionDraft={setDescriptionDraft}
+            meetingLink={meetingLink}
+            setMeetingLink={setMeetingLink}
           />
 
           {/* Agenda */}
@@ -300,36 +403,12 @@ export default function EditEventModal({ isOpen, onClose, event }: EditEventModa
               marginTop: 24,
             }}
           >
-            <button
-              type="button"
-              style={{
-                border: "1px solid #ef4444",
-                color: "#ef4444",
-                background: "#fff",
-                borderRadius: 10,
-                padding: "10px 16px",
-                cursor: "not-allowed",
-                opacity: 0.7,
-              }}
-              disabled
-            >
-              Delete Event
-            </button>
-
-            <button
-              type="button"
-              style={{
-                border: "none",
-                color: "#fff",
-                background: "#20a39f",
-                borderRadius: 10,
-                padding: "10px 16px",
-                cursor: "not-allowed",
-              }}
-              disabled
-            >
-              Save
-            </button>
+            <DeleteButton
+              label="Delete Event"
+              onClick={handleDelete}
+              disabled={false}
+            />
+            <SaveButton label="Save" disabled={!isDirty} onClick={handleSave} />
           </div>
         </div>
       </div>

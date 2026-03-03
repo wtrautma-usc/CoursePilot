@@ -20,11 +20,18 @@ const COLORS = {
   lightGray: "#fafafa",
 };
 
+type ChecklistItem = { id: string; text: string; done: boolean };
+
 type CalendarEvent = {
   id: string;
   title: string;
   start: Date;
   color: "coral" | "yellow" | "purple" | "teal";
+  meetingLink: string | null;
+  agendaItems: ChecklistItem[];
+  nextStepsItems: ChecklistItem[];
+  files: { name: string }[];
+  description?: string;
 };
 
 function isSameDay(a: Date, b: Date) {
@@ -41,7 +48,9 @@ export default function MonthGrid() {
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
+    null,
+  );
 
   const year = displayDate.getFullYear();
   const month = displayDate.getMonth();
@@ -165,6 +174,11 @@ export default function MonthGrid() {
             title: data.title,
             start,
             color: data.color,
+            meetingLink: null,
+            agendaItems: [],
+            nextStepsItems: [],
+            files: [],
+            description: data.description ?? "",
           };
 
           setEvents((prev) => [...prev, newEvent]);
@@ -315,9 +329,9 @@ export default function MonthGrid() {
                   {count >= 3 && (
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         color: "#9CA3AF",
-                        lineHeight: "14px",
+                        lineHeight: "12px",
                         marginTop: 0,
                         userSelect: "none",
                       }}
@@ -334,8 +348,31 @@ export default function MonthGrid() {
 
       <EditEventModal
         isOpen={isEditOpen}
-        onClose={() => setIsEditOpen(false)}
+        onClose={() => {
+          setIsEditOpen(false);
+          setSelectedEvent(null);
+        }}
         event={selectedEvent}
+        onSaveEvent={(id, updates) => {
+          setEvents((prev) =>
+            prev.map((ev) => (ev.id === id ? { ...ev, ...updates } : ev)),
+          );
+
+          // ✅ keep selectedEvent in sync so the modal reflects saved data immediately
+          setSelectedEvent((prev) =>
+            prev && prev.id === id ? { ...prev, ...updates } : prev,
+          );
+
+          setIsEditOpen(false);
+        }}
+        onDeleteEvent={(id) => {
+          // ✅ REMOVE FROM CALENDAR
+          setEvents((prev) => prev.filter((ev) => ev.id !== id));
+
+          // ✅ Close modal + clear selection
+          setIsEditOpen(false);
+          setSelectedEvent(null);
+        }}
       />
     </div>
   );

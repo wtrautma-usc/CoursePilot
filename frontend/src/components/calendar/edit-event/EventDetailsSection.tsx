@@ -1,60 +1,34 @@
 "use client";
 
-/**
- * ------------------------------------------------------------------
- * EventDetailsSection.tsx
- * ------------------------------------------------------------------
- *
- * This component renders the entire "Event Details" section inside
- * the EditEventModal.
- *
- * It includes:
- *  - Section heading with divider line
- *  - Editable event title with pencil icon
- *  - Auto-sizing underline that matches title length
- *  - Time + Date display row
- *  - "Join meeting" placeholder button
- *
- * The title:
- *  - Is NOT editable by default
- *  - Becomes editable when pencil is clicked
- *  - Shows underline (#A4A9AD) while editing
- *  - Underline width grows/shrinks with text length
- *  - Saves on Enter or blur
- *  - Cancels on Escape
- *
- * This component is UI-focused.
- * It receives title state + commit/cancel handlers from parent.
- *
- * ------------------------------------------------------------------
- */
-
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
-/**
- * Minimal event type needed for this section.
- * Keeps this component independent and reusable.
- */
 type EventLike = {
   id: string;
   title: string;
   start: Date;
   end?: Date;
+  description?: string;
 };
 
 type Props = {
   event: EventLike;
+
+  // Title editing (owned by parent)
   titleDraft: string;
   setTitleDraft: (value: string) => void;
   onCommitTitle: () => void;
   onCancelTitle: () => void;
+
+  // Description editing (owned by parent)
+  descriptionDraft: string;
+  setDescriptionDraft: (value: string) => void;
+
+  // Meeting link (owned by parent)
+  meetingLink: string | null;
+  setMeetingLink: (v: string | null) => void;
 };
 
-/**
- * Formats time range like:
- * "8:30 PM - 9:30 PM"
- */
 function formatTimeRange(start: Date, end?: Date) {
   const startLabel = start.toLocaleTimeString([], {
     hour: "numeric",
@@ -71,40 +45,9 @@ function formatTimeRange(start: Date, end?: Date) {
   return `${startLabel} - ${endLabel}`;
 }
 
-/**
- * Formats date like:
- * "March 3"
- */
 function formatDateLabel(d: Date) {
   return d.toLocaleDateString([], { month: "long", day: "numeric" });
 }
-
-/**
- * Small reusable heading with divider line
- */
-function HeadingWithLine({ title }: { title: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        margin: "15px 0 8px",
-      }}
-    >
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#000000" }}>
-        {title}
-      </div>
-      <div style={{ flex: 1, height: 1, background: "#A4A9AD" }} />
-    </div>
-  );
-}
-
-/**
- * ------------------------------------------------------------------
- * Main Component
- * ------------------------------------------------------------------
- */
 
 export default function EventDetailsSection({
   event,
@@ -112,80 +55,160 @@ export default function EventDetailsSection({
   setTitleDraft,
   onCommitTitle,
   onCancelTitle,
+  descriptionDraft,
+  setDescriptionDraft,
+  meetingLink,
+  setMeetingLink,
 }: Props) {
-  /**
-   * Controls whether the title is in edit mode.
-   */
+  // ---------------- Top edit state ----------------
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
 
-  /**
-   * Ref to the input element so we can:
-   *  - Focus automatically
-   *  - Select all text when editing starts
-   */
+  const isEditingTop = isEditingTitle || isEditingDescription;
+
+  // snapshot "before edit" values so outside click / Esc can cancel
+  const titleBeforeRef = useRef<string>("");
+  const descriptionBeforeRef = useRef<string>("");
+
+  // refs for focusing
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  /**
-   * These are used to measure text width dynamically
-   * so the underline matches the exact title length.
-   */
-  const measureRef = useRef<HTMLSpanElement>(null);
-  const [titleInputWidthPx, setTitleInputWidthPx] = useState<number>(40);
+  // wrapper to detect outside clicks for top editor
+  const topEditorRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Exit edit mode if a different event is opened.
-   */
+  // ---------------- Meeting link edit state ----------------
+  const [isEditingMeetingLink, setIsEditingMeetingLink] = useState(false);
+  const [meetingLinkDraft, setMeetingLinkDraft] = useState("");
+  const meetingLinkInputRef = useRef<HTMLInputElement>(null);
+
+  const [isHoverMeetingRow, setIsHoverMeetingRow] = useState(false);
+
+  // When a different event opens, reset edit state + drafts
   useEffect(() => {
     setIsEditingTitle(false);
-  }, [event.id]);
+    setIsEditingDescription(false);
+    setIsEditingMeetingLink(false);
 
-  /**
-   * Auto-focus + select text when entering edit mode.
-   */
+    setMeetingLinkDraft(meetingLink ?? "");
+    setIsHoverMeetingRow(false);
+
+    setTitleDraft(event.title || "");
+    setDescriptionDraft(event.description || "");
+  }, [event.id]); // ✅ constant dependency list
+
+  // Keep meeting link draft synced if parent link changes
   useEffect(() => {
-    if (!isEditingTitle) return;
+    setMeetingLinkDraft(meetingLink ?? "");
+  }, [meetingLink]);
 
+  // Focus title when top edit starts
+  useEffect(() => {
+    if (!isEditingTop) return;
     requestAnimationFrame(() => {
       titleInputRef.current?.focus();
       titleInputRef.current?.select();
     });
-  }, [isEditingTitle]);
+  }, [isEditingTop]);
 
-  /**
-   * Measure the width of the text using a hidden span
-   * so the underline matches exactly.
-   *
-   * We add a few pixels for caret spacing.
-   */
-  useLayoutEffect(() => {
-    const text = titleDraft || " ";
+  function exitTopEdit() {
+    setIsEditingTitle(false);
+    setIsEditingDescription(false);
+  }
 
-    if (measureRef.current) {
-      measureRef.current.textContent = text;
-      const width =
-        Math.ceil(measureRef.current.getBoundingClientRect().width) + 6;
+  function cancelTopEdit() {
+    setTitleDraft(titleBeforeRef.current);
+    setDescriptionDraft(descriptionBeforeRef.current);
+    onCancelTitle(); // keep your parent cancellation logic (if it reverts empty title etc.)
+    exitTopEdit();
+  }
 
-      setTitleInputWidthPx(Math.max(40, width));
+  function saveTopEdit() {
+    // title commit function may trim/revert empty
+    onCommitTitle();
+    exitTopEdit();
+  }
+
+  function startEditingTop() {
+    // snapshot both values
+    titleBeforeRef.current = titleDraft;
+    descriptionBeforeRef.current = descriptionDraft;
+
+    setIsEditingTitle(true);
+    setIsEditingDescription(true);
+  }
+
+  // Outside click cancels BOTH (single listener while editing)
+  useEffect(() => {
+    if (!isEditingTop) return;
+
+    function onDocMouseDown(e: MouseEvent) {
+      const root = topEditorRef.current;
+      if (!root) return;
+
+      if (e.target instanceof Node && !root.contains(e.target)) {
+        cancelTopEdit();
+      }
     }
-  }, [titleDraft]);
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [isEditingTop]); // ✅ constant dependency list
+
+  function normalizeUrl(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
+    return trimmed;
+  }
+
+  function commitMeetingLink() {
+    const normalized = normalizeUrl(meetingLinkDraft);
+
+    if (!normalized) {
+      setMeetingLink(null);
+      setIsEditingMeetingLink(false);
+      return;
+    }
+
+    setMeetingLink(normalized);
+    setIsEditingMeetingLink(false);
+  }
+
+  function cancelMeetingLink() {
+    setMeetingLinkDraft(meetingLink ?? "");
+    setIsEditingMeetingLink(false);
+  }
+
+  function removeMeetingLink() {
+    setMeetingLink(null);
+    setMeetingLinkDraft("");
+    setIsEditingMeetingLink(false);
+    setIsHoverMeetingRow(false);
+  }
+
+  const hasMeetingLink = Boolean(meetingLink && meetingLink.trim().length > 0);
+
+  const externalIconGrey = "/icons/External_Link.svg";
+  const externalIconBlack = "/icons/External_Link_Black.svg";
 
   return (
-    <>
-      <HeadingWithLine title="Event Details" />
-
-      {/* ---------------- Title Row ---------------- */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* -------- Title + Description block -------- */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 10,
-        }}
+        ref={topEditorRef}
+        style={{ display: "flex", flexDirection: "column", gap: 6 }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Non-edit mode */}
-          {!isEditingTitle ? (
+        {/* Title Row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          {!isEditingTop ? (
             <div
               style={{
                 fontSize: 16,
@@ -198,88 +221,118 @@ export default function EventDetailsSection({
               {titleDraft || "Untitled event"}
             </div>
           ) : (
-            /* Edit mode */
-            <div style={{ position: "relative", display: "inline-block" }}>
-              {/* Hidden measurer element */}
-              <span
-                ref={measureRef}
-                style={{
-                  position: "absolute",
-                  visibility: "hidden",
-                  whiteSpace: "pre",
-                  fontSize: 16,
-                  fontWeight: 500,
-                  fontFamily: "Inter, sans-serif",
-                }}
-              />
+            <input
+              ref={titleInputRef}
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  saveTopEdit(); // ✅ saves both
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelTopEdit(); // ✅ cancels both
+                }
+              }}
+              aria-label="Edit event title"
+              placeholder="Event name"
+              style={{
+                width: "100%",
+                height: 34,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid #DCE0E5",
+                background: "#EDF0F2",
+                outline: "none",
+                color: "#000",
+                boxSizing: "border-box",
+                fontFamily: "Inter, sans-serif",
+              }}
+            />
+          )}
 
-              <input
-                ref={titleInputRef}
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={() => {
-                  onCommitTitle();
-                  setIsEditingTitle(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onCommitTitle();
-                    setIsEditingTitle(false);
-                  }
-
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    onCancelTitle();
-                    setIsEditingTitle(false);
-                  }
-                }}
-                style={{
-                  width: titleInputWidthPx,
-                  fontSize: 16,
-                  fontWeight: 500,
-                  color: "#000000",
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  borderBottom: "1px solid #A4A9AD", // Underline color
-                  paddingBottom: 2,
-                }}
-                aria-label="Edit event title"
+          {/* Pencil opens BOTH (and disappears while editing) */}
+          {!isEditingTop && (
+            <button
+              type="button"
+              onClick={startEditingTop}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                opacity: 0.8,
+              }}
+              aria-label="Edit title and description"
+            >
+              <Image
+                src="/icons/Edit_Pencil_01.svg"
+                alt="Edit"
+                width={16}
+                height={16}
+                draggable={false}
               />
-            </div>
+            </button>
           )}
         </div>
 
-        {/* Pencil Icon */}
-        <button
-          type="button"
-          onClick={() => setIsEditingTitle(true)}
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            opacity: 0.8,
-          }}
-          aria-label="Edit title"
-        >
-          <Image
-            src="/icons/Edit_Pencil_01.svg"
-            alt="Edit"
-            width={16}
-            height={16}
-            draggable={false}
+        {/* Description */}
+        {!isEditingTop ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: descriptionDraft?.trim() ? "#000000" : "#9CA3AF",
+              opacity: descriptionDraft?.trim() ? 0.85 : 1,
+              lineHeight: "16px",
+              userSelect: "none",
+            }}
+          >
+            {descriptionDraft?.trim() ? descriptionDraft : "Add description"}
+          </div>
+        ) : (
+          <textarea
+            ref={descriptionRef}
+            value={descriptionDraft}
+            onChange={(e) => setDescriptionDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter saves BOTH (Shift+Enter makes newline)
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                saveTopEdit();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancelTopEdit();
+              }
+            }}
+            aria-label="Edit event description"
+            placeholder="Add description"
+            style={{
+              width: "100%",
+              minHeight: 64,
+              resize: "vertical",
+              fontSize: 12,
+              color: "#000000",
+              background: "#EDF0F2",
+              border: "1px solid #DCE0E5",
+              borderRadius: 6,
+              padding: "8px 10px",
+              outline: "none",
+              fontFamily: "Inter, sans-serif",
+              boxSizing: "border-box",
+            }}
           />
-        </button>
+        )}
       </div>
 
-      {/* ---------------- Time + Date Row ---------------- */}
+      {/* -------- Time + Date Row -------- */}
       <div
         style={{
           display: "flex",
           gap: 18,
           alignItems: "center",
-          marginBottom: 14,
           color: "#111827",
           fontSize: 13,
         }}
@@ -295,23 +348,142 @@ export default function EventDetailsSection({
         </span>
       </div>
 
-      {/* ---------------- Join Meeting Button ---------------- */}
-      <button
-        type="button"
-        style={{
-          border: "1px solid #e5e7eb",
-          background: "#f3f4f6",
-          borderRadius: 10,
-          padding: "8px 12px",
-          fontSize: 12,
-          cursor: "not-allowed",
-          opacity: 0.7,
-          marginBottom: 8,
-        }}
-        disabled
-      >
-        Join meeting
-      </button>
-    </>
+      {/* -------- Meeting Link Row -------- */}
+      {!hasMeetingLink ? (
+        !isEditingMeetingLink ? (
+          <button
+            type="button"
+            onClick={() => setIsEditingMeetingLink(true)}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              color: "#A4A9AD",
+              fontSize: 12,
+              fontFamily: "Inter, sans-serif",
+            }}
+            aria-label="Add meeting link"
+          >
+            <Image
+              src={externalIconGrey}
+              alt=""
+              width={16}
+              height={16}
+              draggable={false}
+            />
+            <span>Add meeting link</span>
+          </button>
+        ) : (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Image
+              src={externalIconGrey}
+              alt=""
+              width={16}
+              height={16}
+              draggable={false}
+            />
+            <input
+              ref={meetingLinkInputRef}
+              value={meetingLinkDraft}
+              onChange={(e) => setMeetingLinkDraft(e.target.value)}
+              onBlur={commitMeetingLink}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitMeetingLink();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelMeetingLink();
+                }
+              }}
+              placeholder="Paste meeting link"
+              style={{
+                width: 280,
+                fontSize: 12,
+                color: "#000000",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                borderBottom: "1px solid #A4A9AD",
+                paddingBottom: 2,
+                fontFamily: "Inter, sans-serif",
+              }}
+              aria-label="Meeting link input"
+            />
+          </div>
+        )
+      ) : (
+        <div
+          onMouseEnter={() => setIsHoverMeetingRow(true)}
+          onMouseLeave={() => setIsHoverMeetingRow(false)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <a
+            href={meetingLink!}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              color: "#000000",
+              fontSize: 12,
+              textDecoration: "none",
+              cursor: "pointer",
+              fontFamily: "Inter, sans-serif",
+            }}
+            aria-label="Open meeting link"
+            title="Open meeting link"
+          >
+            <Image
+              src={externalIconBlack}
+              alt=""
+              width={16}
+              height={16}
+              draggable={false}
+            />
+            <span style={{ color: "#000000" }}>Meeting link</span>
+          </a>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              removeMeetingLink();
+            }}
+            style={{
+              marginLeft: "auto",
+              width: 18,
+              height: 18,
+              borderRadius: 6,
+              border: "none",
+              background: "transparent",
+              color: "#A4A9AD",
+              cursor: "pointer",
+              lineHeight: "18px",
+              fontSize: 16,
+              opacity: isHoverMeetingRow ? 1 : 0,
+              pointerEvents: isHoverMeetingRow ? "auto" : "none",
+              transition: "opacity 0.15s ease",
+            }}
+            aria-label="Remove meeting link"
+            title="Remove meeting link"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
