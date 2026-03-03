@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr
@@ -129,3 +129,62 @@ class EventUpdate(BaseModel):
     grading_weight: Optional[str] = None
     sub_tasks: Optional[List[str]] = None
     is_confirmed: Optional[bool] = None
+
+
+# ============================================
+# Gamification schemas
+# ============================================
+
+# XP awarded per action type
+XP_TABLE: dict[str, int] = {
+    "syllabus_upload":    100,   # uploaded a syllabus PDF
+    "event_confirmed":     15,   # confirmed an AI-extracted event
+    "task_complete":       10,   # checked off a study sub-task
+    "deadline_bonus":     150,   # completed ALL tasks before a deadline
+    "daily_streak":        20,   # maintained streak for another day
+}
+
+# XP thresholds for each level
+LEVEL_THRESHOLDS: list[tuple[int, str]] = [
+    (0,    "Freshman"),
+    (500,  "Sophomore"),
+    (1500, "Junior"),
+    (3000, "Senior"),
+    (5000, "Graduate"),
+    (8000, "Professor"),
+]
+
+
+def compute_level(total_xp: int) -> tuple[int, str]:
+    """Return (level_number, level_name) derived from total_xp."""
+    level_number = 0
+    level_name = LEVEL_THRESHOLDS[0][1]
+    for i, (threshold, name) in enumerate(LEVEL_THRESHOLDS):
+        if total_xp >= threshold:
+            level_number = i
+            level_name = name
+    return level_number, level_name
+
+
+class UserStats(BaseModel):
+    """
+    Gamification stats stored in Firestore under user_stats/{uid}.
+
+    Note: `level` is NOT stored — it is always derived from `total_xp`
+    at read time via compute_level(). This prevents stale data if
+    level thresholds change in a future sprint.
+    """
+    uid: str
+    current_streak: int = 0                   # consecutive days with activity
+    total_xp: int = 0                          # cumulative XP, never decreases
+    last_activity_date: Optional[date] = None  # date of last productive action
+
+
+class UserStatsResponse(UserStats):
+    """
+    UserStats extended with derived fields for API responses.
+    Level and level_name are computed from total_xp, never stored.
+    """
+    level: int = 0
+    level_name: str = "Freshman"
+    xp_to_next_level: Optional[int] = None     # None if already at max level

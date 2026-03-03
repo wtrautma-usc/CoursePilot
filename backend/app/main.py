@@ -25,11 +25,12 @@ app.add_middleware(
 )
 
 # Import routers
-from app.routes import syllabi, users
+from app.routes import gamification, syllabi, users
 
 # Register routers
 app.include_router(users.router)
 app.include_router(syllabi.router)
+app.include_router(gamification.router)
 # Job status is tracked via syllabus status field — poll GET /api/v1/syllabi/{id}
 
 
