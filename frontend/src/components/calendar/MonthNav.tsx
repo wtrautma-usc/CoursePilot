@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import CategoriesPill from "./filters/CategoriesPill";
 
 type MonthNavProps = {
   label: string; // e.g. "FEBRUARY 2026"

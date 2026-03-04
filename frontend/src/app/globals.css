@@ -24,16 +24,33 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-/* Hide native calendar & clock icons */
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="time"]::-webkit-calendar-picker-indicator {
-  display: none;
-  -webkit-appearance: none;
-}
 
 /* Remove default styling in Safari/Chrome */
 input[type="date"],
 input[type="time"] {
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* Remove the built-in extra padding/spacing inside Chrome date/time inputs */
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+/* ✅ ensure the actual input text is NOT italic */
+.category-input {
+  font-style: normal !important;
+}
+
+/* ✅ but the placeholder IS italic */
+.category-input::placeholder {
+  font-style: italic;
+  color: #9CA3AF;
+  font-weight: 400;
 }

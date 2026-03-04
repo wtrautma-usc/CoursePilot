@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import EventDescriptionField from "../fields/EventDescriptionField";
+import EventTitleInput from "../fields/EventTitleInput";
 
 type EventLike = {
   id: string;
@@ -61,10 +63,7 @@ export default function EventDetailsSection({
   setMeetingLink,
 }: Props) {
   // ---------------- Top edit state ----------------
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [isEditingDescription, setIsEditingDescription] = useState(false);
-
-  const isEditingTop = isEditingTitle || isEditingDescription;
+  const [isEditingTop, setIsEditingTop] = useState(false);
 
   // snapshot "before edit" values so outside click / Esc can cancel
   const titleBeforeRef = useRef<string>("");
@@ -81,13 +80,11 @@ export default function EventDetailsSection({
   const [isEditingMeetingLink, setIsEditingMeetingLink] = useState(false);
   const [meetingLinkDraft, setMeetingLinkDraft] = useState("");
   const meetingLinkInputRef = useRef<HTMLInputElement>(null);
-
   const [isHoverMeetingRow, setIsHoverMeetingRow] = useState(false);
 
   // When a different event opens, reset edit state + drafts
   useEffect(() => {
-    setIsEditingTitle(false);
-    setIsEditingDescription(false);
+    setIsEditingTop(false);
     setIsEditingMeetingLink(false);
 
     setMeetingLinkDraft(meetingLink ?? "");
@@ -111,31 +108,28 @@ export default function EventDetailsSection({
     });
   }, [isEditingTop]);
 
-  function exitTopEdit() {
-    setIsEditingTitle(false);
-    setIsEditingDescription(false);
-  }
-
-  function cancelTopEdit() {
-    setTitleDraft(titleBeforeRef.current);
-    setDescriptionDraft(descriptionBeforeRef.current);
-    onCancelTitle(); // keep your parent cancellation logic (if it reverts empty title etc.)
-    exitTopEdit();
-  }
-
-  function saveTopEdit() {
-    // title commit function may trim/revert empty
-    onCommitTitle();
-    exitTopEdit();
-  }
-
   function startEditingTop() {
     // snapshot both values
     titleBeforeRef.current = titleDraft;
     descriptionBeforeRef.current = descriptionDraft;
 
-    setIsEditingTitle(true);
-    setIsEditingDescription(true);
+    setIsEditingTop(true);
+  }
+
+  function exitTopEdit() {
+    setIsEditingTop(false);
+  }
+
+  function cancelTopEdit() {
+    setTitleDraft(titleBeforeRef.current);
+    setDescriptionDraft(descriptionBeforeRef.current);
+    onCancelTitle(); // keep your parent cancellation logic
+    exitTopEdit();
+  }
+
+  function saveTopEdit() {
+    onCommitTitle(); // title trim/revert-empty logic stays here
+    exitTopEdit();
   }
 
   // Outside click cancels BOTH (single listener while editing)
@@ -145,7 +139,6 @@ export default function EventDetailsSection({
     function onDocMouseDown(e: MouseEvent) {
       const root = topEditorRef.current;
       if (!root) return;
-
       if (e.target instanceof Node && !root.contains(e.target)) {
         cancelTopEdit();
       }
@@ -221,10 +214,10 @@ export default function EventDetailsSection({
               {titleDraft || "Untitled event"}
             </div>
           ) : (
-            <input
-              ref={titleInputRef}
+            <EventTitleInput
               value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
+              onChange={setTitleDraft}
+              inputRef={titleInputRef}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -235,22 +228,7 @@ export default function EventDetailsSection({
                   cancelTopEdit(); // ✅ cancels both
                 }
               }}
-              aria-label="Edit event title"
               placeholder="Event name"
-              style={{
-                width: "100%",
-                height: 34,
-                fontSize: 12,
-                fontWeight: 500,
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid #DCE0E5",
-                background: "#EDF0F2",
-                outline: "none",
-                color: "#000",
-                boxSizing: "border-box",
-                fontFamily: "Inter, sans-serif",
-              }}
             />
           )}
 
@@ -292,10 +270,10 @@ export default function EventDetailsSection({
             {descriptionDraft?.trim() ? descriptionDraft : "Add description"}
           </div>
         ) : (
-          <textarea
-            ref={descriptionRef}
+          <EventDescriptionField
             value={descriptionDraft}
-            onChange={(e) => setDescriptionDraft(e.target.value)}
+            onChange={setDescriptionDraft}
+            inputRef={descriptionRef}
             onKeyDown={(e) => {
               // Enter saves BOTH (Shift+Enter makes newline)
               if (e.key === "Enter" && !e.shiftKey) {
@@ -306,22 +284,6 @@ export default function EventDetailsSection({
                 e.preventDefault();
                 cancelTopEdit();
               }
-            }}
-            aria-label="Edit event description"
-            placeholder="Add description"
-            style={{
-              width: "100%",
-              minHeight: 64,
-              resize: "vertical",
-              fontSize: 12,
-              color: "#000000",
-              background: "#EDF0F2",
-              border: "1px solid #DCE0E5",
-              borderRadius: 6,
-              padding: "8px 10px",
-              outline: "none",
-              fontFamily: "Inter, sans-serif",
-              boxSizing: "border-box",
             }}
           />
         )}

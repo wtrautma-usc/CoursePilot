@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import AddRow from "./AddRow";
 import ChecklistRow from "./ChecklistRow";
 import EventDetailsSection from "./EventDetailsSection";
+import CloseButton from "@/components/ui/CloseButton";
 
 import SaveButton from "../buttons/SaveButton";
 import DeleteButton from "../buttons/DeleteButton";
@@ -284,19 +285,7 @@ export default function EditEventModal({
             Edit Event
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              border: "none",
-              background: "transparent",
-              fontSize: 22,
-              cursor: "pointer",
-              lineHeight: "22px",
-            }}
-          >
-            ×
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
         {/* Body */}
