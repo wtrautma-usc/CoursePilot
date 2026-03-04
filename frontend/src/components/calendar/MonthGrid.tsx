@@ -7,41 +7,18 @@ import AddEventButton from "./AddEventButton";
 import EditEventModal from "./edit-event/EditEventModal";
 import CategoriesPill from "./filters/CategoriesPill";
 import CategoriesDropdown from "./filters/CategoriesDropdown";
+import DayCell from "./DayCell";
 
-const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+import type { CalendarEvent } from "./types";
+import { DAY_LABELS, MONTH_NAMES, CALENDAR_COLORS } from "./constants";
+import { isSameDay } from "./util";
 
-/* ========== COLOR PALETTE ========== */
-const COLORS = {
-  coral: "#E07856",
-  yellow: "#F4B860",
-  purple: "#B8A4D4",
-  teal: "#20A39E",
-  borderGray: "#DCE0E5",
-  textGray: "#23001E",
-  lightGray: "#fafafa",
+type AnchorPos = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 };
-
-type ChecklistItem = { id: string; text: string; done: boolean };
-
-type CalendarEvent = {
-  id: string;
-  title: string;
-  start: Date;
-  color: "coral" | "yellow" | "purple" | "teal";
-  meetingLink: string | null;
-  agendaItems: ChecklistItem[];
-  nextStepsItems: ChecklistItem[];
-  files: { name: string }[];
-  description?: string;
-};
-
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
 
 export default function MonthGrid() {
   const [displayDate, setDisplayDate] = useState(() => new Date());
@@ -50,29 +27,22 @@ export default function MonthGrid() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
-  // Categories dropdown state + anchoring
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const categoriesBtnRef = useRef<HTMLDivElement | null>(null);
-  const [categoriesPos, setCategoriesPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
+  const [categoriesPos, setCategoriesPos] = useState<AnchorPos | null>(null);
 
-useLayoutEffect(() => {
-  if (!isCategoriesOpen) return;
-
-  const el = categoriesBtnRef.current;
-  if (!el) return;
-
-  const rect = el.getBoundingClientRect();
-
-  setCategoriesPos({
-    top: rect.top + window.scrollY,
-    left: rect.left + window.scrollX,
-    width: rect.width,
-    height: rect.height,
-  });
-}, [isCategoriesOpen]);
+  useLayoutEffect(() => {
+    if (!isCategoriesOpen) return;
+    const el = categoriesBtnRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setCategoriesPos({
+      top: rect.top + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+      height: rect.height,
+    });
+  }, [isCategoriesOpen]);
 
   const year = displayDate.getFullYear();
   const month = displayDate.getMonth();
@@ -87,31 +57,17 @@ useLayoutEffect(() => {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const startingDayOfWeek = firstDay === 0 ? 6 : firstDay - 1;
   const totalCells = Math.ceil((daysInMonth + startingDayOfWeek) / 7) * 7;
 
-  const calendarDays: Date[] = Array.from({ length: totalCells }).map((_, i) => {
-    const dayIndex = i - startingDayOfWeek + 1;
-    return new Date(year, month, dayIndex);
-  });
+  const calendarDays: Date[] = Array.from({ length: totalCells }).map(
+    (_, i) => {
+      const dayIndex = i - startingDayOfWeek + 1;
+      return new Date(year, month, dayIndex);
+    },
+  );
 
-  const weekRowCount = totalCells / 7; // 5 or 6 rows
-
-  const monthNames = [
-    "JANUARY",
-    "FEBRUARY",
-    "MARCH",
-    "APRIL",
-    "MAY",
-    "JUNE",
-    "JULY",
-    "AUGUST",
-    "SEPTEMBER",
-    "OCTOBER",
-    "NOVEMBER",
-    "DECEMBER",
-  ];
+  const weekRowCount = totalCells / 7;
 
   const isExpandedCalendar = useMemo(() => {
     for (const d of calendarDays) {
@@ -120,18 +76,6 @@ useLayoutEffect(() => {
     }
     return false;
   }, [events, calendarDays]);
-
-  /* ========= Pills sizing ========= */
-  const CELL_PADDING = 6;
-  const PILL_HEIGHT = 26;
-  const PILL_PADDING_X = 8;
-  const PILL_FONT_SIZE = 11;
-  const PILL_GAP = 3;
-
-  const TWO_PILLS_H = PILL_HEIGHT * 2 + PILL_GAP;
-  const SEE_MORE_H = 14;
-  const RESERVED_EVENTS_AREA_H = TWO_PILLS_H;
-  const RESERVED_EVENTS_AREA_H_EXPANDED = TWO_PILLS_H + SEE_MORE_H;
 
   return (
     <div
@@ -153,24 +97,20 @@ useLayoutEffect(() => {
       >
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <div ref={categoriesBtnRef} style={{ position: "relative" }}>
-            <CategoriesPill
-              onClick={() => setIsCategoriesOpen((v) => !v)}
-            />
+            <CategoriesPill onClick={() => setIsCategoriesOpen((v) => !v)} />
           </div>
-
           <AddEventButton onClick={() => setIsAddOpen(true)} />
         </div>
 
         <div style={{ marginLeft: "auto", marginRight: -2 }}>
           <MonthNav
-            label={`${monthNames[month]} ${year}`}
+            label={`${MONTH_NAMES[month]} ${year}`}
             onPrev={goToPreviousMonth}
             onNext={goToNextMonth}
           />
         </div>
       </div>
 
-      {/* Categories dropdown (anchored under Categories pill) */}
       <CategoriesDropdown
         isOpen={isCategoriesOpen}
         onClose={() => setIsCategoriesOpen(false)}
@@ -183,7 +123,6 @@ useLayoutEffect(() => {
         onSave={(data) => {
           const [hh, mm] = (data.startTime ?? "09:00").split(":").map(Number);
           const [yyyy, monthStr, dayStr] = data.startDate.split("-").map(Number);
-
           const start = new Date(yyyy, monthStr - 1, dayStr, hh, mm);
 
           const newEvent: CalendarEvent = {
@@ -226,11 +165,11 @@ useLayoutEffect(() => {
             flexShrink: 0,
           }}
         >
-          {days.map((d) => (
+          {DAY_LABELS.map((d) => (
             <div
               key={d}
               style={{
-                border: `1px solid ${COLORS.borderGray}`,
+                border: `1px solid ${CALENDAR_COLORS.borderGray}`,
                 display: "flex",
                 alignItems: "center",
                 paddingLeft: 12,
@@ -256,107 +195,21 @@ useLayoutEffect(() => {
           }}
         >
           {calendarDays.map((cellDate, i) => {
-            const now = new Date();
-            const isCurrentDay =
-              cellDate.getDate() === now.getDate() &&
-              cellDate.getMonth() === now.getMonth() &&
-              cellDate.getFullYear() === now.getFullYear();
-
-            const isOtherMonth = cellDate.getMonth() !== month;
-
-            const eventsForThisDay = events
+            const eventsForDay = events
               .filter((e) => isSameDay(e.start, cellDate))
               .sort((a, b) => a.start.getTime() - b.start.getTime());
 
-            const count = eventsForThisDay.length;
-            const isExpandedCell = count >= 3;
-
             return (
-              <div
+              <DayCell
                 key={i}
-                style={{
-                  border: `1px solid ${COLORS.borderGray}`,
-                  padding: CELL_PADDING,
-                  background: isOtherMonth ? COLORS.lightGray : "#fff",
-                  overflow: "hidden",
-                  display: "flex",
-                  flexDirection: "column",
-                  ...(isCurrentDay && { border: "2px solid #4A90E2" }),
+                cellDate={cellDate}
+                currentMonth={month}
+                events={eventsForDay}
+                onEventClick={(ev) => {
+                  setSelectedEvent(ev);
+                  setIsEditOpen(true);
                 }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    marginBottom: 4,
-                  }}
-                >
-                  {cellDate.getDate()}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: PILL_GAP,
-                    overflow: "hidden",
-                    height: isExpandedCell
-                      ? RESERVED_EVENTS_AREA_H_EXPANDED
-                      : RESERVED_EVENTS_AREA_H,
-                  }}
-                >
-                  {eventsForThisDay.slice(0, 2).map((ev) => (
-                    <div
-                      key={ev.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedEvent(ev);
-                        setIsEditOpen(true);
-                      }}
-                      style={{
-                        height: PILL_HEIGHT,
-                        width: "100%",
-                        borderRadius: 6,
-                        padding: `0 ${PILL_PADDING_X}px`,
-                        display: "flex",
-                        alignItems: "center",
-                        fontSize: PILL_FONT_SIZE,
-                        fontWeight: 500,
-                        color: "#fff",
-                        background:
-                          ev.color === "coral"
-                            ? "rgba(239, 91, 91, 0.85)"
-                            : ev.color === "yellow"
-                            ? "rgba(255, 186, 73, 1)"
-                            : ev.color === "purple"
-                            ? "rgba(184, 164, 212, 0.9)"
-                            : "rgba(32, 163, 158, 0.9)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        cursor: "pointer",
-                      }}
-                      title={ev.title}
-                    >
-                      {ev.title}
-                    </div>
-                  ))}
-
-                  {count >= 3 && (
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#9CA3AF",
-                        lineHeight: "12px",
-                        marginTop: 0,
-                        userSelect: "none",
-                      }}
-                    >
-                      See more
-                    </div>
-                  )}
-                </div>
-              </div>
+              />
             );
           })}
         </div>
@@ -373,11 +226,9 @@ useLayoutEffect(() => {
           setEvents((prev) =>
             prev.map((ev) => (ev.id === id ? { ...ev, ...updates } : ev)),
           );
-
           setSelectedEvent((prev) =>
             prev && prev.id === id ? { ...prev, ...updates } : prev,
           );
-
           setIsEditOpen(false);
         }}
         onDeleteEvent={(id) => {
